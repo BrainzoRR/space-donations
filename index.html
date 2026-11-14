@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPACE DONATIONS — топ донатеров</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<style>
+:root{
+  --neon:#9be7ff; --yellow:#ffe45e; --green:#7dff6e; --red:#ff5c7a;
+  --purple:#c99bff; --dim:#5a6b8c; --border:#22345f;
+  --panel-bg:rgba(9,14,34,.88);
+}
+*{box-sizing:border-box; margin:0; padding:0}
+::selection{background:#c99bff; color:#05081a}
+body{
+  margin:0; min-height:100vh; color:#cfe0ff;
+  font-family:'VT323',monospace; font-size:18px;
+  background:radial-gradient(ellipse at 50% -10%, #101a44 0%, #05081a 55%, #020409 100%);
+  overflow-x:hidden;
+}
+#sky{position:fixed; inset:0; z-index:0}
+.scanlines{position:fixed; inset:0; pointer-events:none; z-index:50; opacity:.45;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.15) 0 1px, transparent 1px 3px)}
+.vignette{position:fixed; inset:0; pointer-events:none; z-index:51;
+  background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,5,.5) 100%)}
+.wrap{max-width:1150px; margin:0 auto; padding:26px 18px 60px; position:relative; z-index:5}
+
+.head{display:flex; flex-wrap:wrap; gap:18px; justify-content:space-between; align-items:flex-start; margin-bottom:26px}
+.logo-line1{font-size:56px; color:var(--neon); letter-spacing:16px;
+  text-shadow:0 0 6px #9be7ff, 0 0 18px rgba(155,231,255,.55), 4px 4px 0 #1b3c6e}
+.logo-line2{font-size:40px; color:var(--yellow); letter-spacing:9px;
+  text-shadow:0 0 6px #ffe45e, 0 0 16px rgba(255,228,94,.5), 3px 3px 0 #6e4a1b; margin-top:-6px}
+.tagline{color:var(--dim); font-size:16px; margin-top:4px; letter-spacing:2px}
+
+.panel{background:var(--panel-bg); border:2px solid var(--border);
+  box-shadow:inset 0 0 26px rgba(64,120,255,.07), 0 0 0 2px #060b1c;
+  padding:16px; image-rendering:pixelated}
+.panel-title{color:var(--purple); font-size:17px; letter-spacing:2px; margin-bottom:12px;
+  text-shadow:0 0 10px rgba(201,155,255,.5)}
+.panel-title.big{font-size:22px; margin:4px 0 14px}
+.live{color:var(--red); font-size:14px; animation:blink 1.1s steps(2) infinite}
+
+.status-panel{min-width:300px}
+.srow{display:flex; gap:9px; align-items:center; font-size:17px; margin-top:7px}
+.dot{width:10px; height:10px; flex-shrink:0}
+.ok{color:var(--green)} .warn{color:var(--yellow)} .bad{color:var(--red)} .off{color:var(--dim)}
+.dot.ok{background:var(--green); box-shadow:0 0 8px var(--green)}
+.dot.warn{background:var(--yellow); box-shadow:0 0 8px var(--yellow)}
+.dot.bad{background:var(--red); box-shadow:0 0 8px var(--red)}
+.dot.off{background:var(--dim)}
+.demo-badge{display:inline-block; border:2px solid var(--yellow); color:var(--yellow);
+  padding:4px 8px; font-size:15px; margin-bottom:8px; animation:blink 1.2s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+
+.goal-panel{margin-bottom:26px}
+.goal-top{display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap}
+.goal-name{font-size:22px; color:var(--neon)}
+.goal-pct{font-size:30px; color:var(--yellow); text-shadow:0 0 12px rgba(255,228,94,.5)}
+.bar{height:26px; border:2px solid var(--border); background:#060b1c; position:relative; margin-top:10px}
+.bar-fill{height:100%; width:0; transition:width .8s steps(12);
+  background:repeating-linear-gradient(90deg, var(--neon) 0 10px, #3fa9c9 10px 20px);
+  box-shadow:0 0 14px rgba(155,231,255,.55)}
+.bar-glow{position:absolute; top:2px; bottom:2px; width:5px; left:0; background:var(--neon);
+  box-shadow:0 0 12px var(--neon)}
+.bar-labels{display:flex; justify-content:space-between; margin-top:6px; color:var(--dim); font-size:17px}
+
+#grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(225px,1fr)); gap:12px; margin-bottom:26px}
+.donor{position:relative; background:var(--panel-bg); border:2px solid var(--border);
+  padding:12px 10px 10px 14px; transition:transform .15s; animation:pop .3s steps(3)}
+.donor:hover{transform:translateY(-3px)}
+@keyframes pop{0%{transform:translateY(-8px) scale(.96); opacity:0}}
+.place-1{border-color:var(--yellow); box-shadow:0 0 18px rgba(255,228,94,.28), inset 0 0 22px rgba(255,228,94,.07)}
+.place-2{border-color:#cfd8ff; box-shadow:0 0 14px rgba(207,216,255,.22)}
+.place-3{border-color:#ffb37a; box-shadow:0 0 14px rgba(255,179,122,.2)}
+.d-place{position:absolute; top:-10px; left:-10px; width:34px; height:34px;
+  display:flex; align-items:center; justify-content:center; font-size:19px;
+  background:#101c3f; border:2px solid var(--border)}
+.d-body{display:flex; gap:10px; align-items:center}
+.d-ava{width:44px; height:44px; flex-shrink:0; image-rendering:pixelated;
+  border:2px solid #2a3f6e; background:#0a1128}
+.d-info{min-width:0; flex:1}
+.d-name{font-size:19px; color:var(--neon); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-shadow:0 0 8px rgba(155,231,255,.5)}
+.d-sub{font-size:15px; color:var(--dim)}
+.d-amt{text-align:right}
+.d-sum{font-size:22px; color:var(--yellow); text-shadow:0 0 10px rgba(255,228,94,.45)}
+.d-cur{font-size:13px; color:var(--dim)}
+.d-msg{margin-top:8px; border-top:1px dashed var(--border); padding-top:6px;
+  font-size:15px; color:#b8c6e8; font-style:italic; max-height:40px; overflow:hidden}
+.d-msg::before{content:"❝ "; color:var(--dim)}
+
+.cols{display:grid; grid-template-columns:1.25fr .9fr; gap:16px; align-items:start}
+#feed{display:flex; flex-direction:column; gap:8px; min-height:280px}
+.f-item{display:flex; gap:10px; align-items:flex-start; background:rgba(9,14,34,.7);
+  border:2px solid var(--border); border-left:4px solid var(--neon);
+  padding:8px 10px; animation:pop .25s steps(3)}
+.f-item.fx-big{border-left-color:var(--yellow)}
+.f-item.fx-voice{border-left-color:var(--green)}
+.f-item.fx-video{border-left-color:var(--purple)}
+.f-item.fx-test{opacity:.7; border-left-color:var(--dim)}
+.f-ava{width:36px; height:36px; flex-shrink:0; image-rendering:pixelated;
+  border:2px solid #2a3f6e; background:#0a1128}
+.f-main{flex:1; min-width:0}
+.f-head{display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
+.f-name{color:var(--neon); font-size:18px}
+.f-amt{color:var(--yellow); font-size:18px}
+.f-eq{color:var(--dim); font-size:14px}
+.f-time{margin-left:auto; color:var(--dim); font-size:14px}
+.f-msg{font-size:16px; color:#cdd9f5; margin-top:2px}
+.f-badges{display:flex; gap:4px}
+.f-badges span{font-size:13px; border:1px solid var(--border); padding:0 5px; color:var(--dim)}
+.feed-empty{color:var(--dim); font-size:17px; padding:14px; text-align:center}
+.legend{display:flex; flex-wrap:wrap; gap:12px; font-size:15px; color:var(--dim); margin-top:12px}
+.legend i{display:inline-block; width:10px; height:10px; margin-right:5px}
+
+.cn{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:9px}
+.cn-label{width:140px; flex-shrink:0; color:var(--purple); font-size:17px}
+.inp{flex:1; min-width:140px; background:#060b1c; border:2px solid var(--border);
+  color:var(--neon); font-family:'VT323',monospace; font-size:16px; padding:7px 9px; outline:none}
+.inp:focus{border-color:var(--purple); box-shadow:0 0 10px rgba(201,155,255,.3)}
+.btn{background:#16244d; border:2px solid var(--neon); color:var(--neon);
+  font-family:'VT323',monospace; font-size:17px; letter-spacing:1px; padding:7px 12px;
+  cursor:pointer; box-shadow:0 3px 0 #0a1430}
+.btn:hover{background:#1c2f63}
+.btn:active{transform:translateY(2px); box-shadow:0 1px 0 #0a1430}
+.hint{font-size:15px; color:var(--dim); line-height:1.55; margin-top:8px}
+.hint b{color:var(--neon); font-weight:400}
+.note{font-size:14px; color:#8fa3c8; margin-top:8px; line-height:1.5}
+
+footer{margin-top:34px; text-align:center; color:var(--dim); font-size:15px}
+footer a{color:var(--purple); cursor:pointer}
+
+#toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+  opacity:0; transition:.3s; z-index:100; background:#0b1230; border:2px solid var(--neon);
+  color:var(--neon); padding:10px 16px; font-size:18px; pointer-events:none; max-width:90vw}
+#toast.show{opacity:1; transform:translateX(-50%)}
+
+#alert{position:fixed; inset:0; display:none; z-index:90; align-items:center; justify-content:center;
+  background:rgba(4,6,18,.72)}
+#alert.show{display:flex}
+#alertBox{background:#0b1230; border:4px solid var(--yellow); padding:30px 42px; text-align:center;
+  max-width:540px; box-shadow:0 0 44px rgba(255,228,94,.4); animation:pop .3s steps(4); cursor:pointer}
+#alertUser{font-size:20px; color:var(--dim); letter-spacing:2px}
+#alertAmt{font-size:62px; color:var(--yellow); text-shadow:0 0 24px rgba(255,228,94,.6); margin:6px 0}
+#alertCur{font-size:19px; color:var(--dim)}
+#alertMsg{font-size:18px; color:var(--neon); margin-top:8px}
+
+@media (max-width:980px){.cols{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .logo-line1{font-size:38px; letter-spacing:9px}
+  .logo-line2{font-size:28px; letter-spacing:5px}
+  .cn-label{width:100%}
+}
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <div class="logo-line1">SPACE</div>
+      <div class="logo-line2">DONATIONS</div>
+      <div class="tagline">// orbital top-donators station v1.0</div>
+    </div>
+    <div class="panel status-panel">
+      <div class="panel-title">▸ СТАТУС СИСТЕМЫ</div>
+      <span id="modeDemo" class="demo-badge" style="display:none">◈ ДЕМО-РЕЖИМ · эмуляция донатов ~9с</span>
+      <div class="srow"><span class="dot off"></span><span id="st-dx" class="off">DonateX — нет токена</span></div>
+      <div class="srow"><span class="dot off"></span><span id="st-dxr" class="off">DonateX realtime: нет токена</span></div>
+      <div class="srow"><span class="dot off"></span><span id="st-da" class="off">DonationAlerts — нет токена</span></div>
+      <div class="srow"><span class="dot off"></span><span id="st-dar" class="off">DA realtime: нет токена</span></div>
+    </div>
+  </header>
+
+  <section class="panel goal-panel" id="goalPanel" style="display:none">
+    <div class="panel-title">▸ ЦЕЛЬ СБОРА</div>
+    <div class="goal-top"><span id="goalName" class="goal-name"></span><span id="goalPct" class="goal-pct"></span></div>
+    <div class="bar"><div class="bar-fill" id="goalBar"></div><div class="bar-glow" id="goalGlow"></div></div>
+    <div class="bar-labels"><span id="goalCur"></span><span id="goalTgt"></span></div>
+  </section>
+
+  <section>
+    <div class="panel-title big">▸ ЗАЛ СЛАВЫ · ТОП ДОНАТЕРОВ</div>
+    <div id="grid"></div>
+  </section>
+
+  <section class="cols">
+    <div class="panel">
+      <div class="panel-title">▸ ЛЕНТА ДОНАТОВ <span class="live">● LIVE</span></div>
+      <div id="feed"><div class="feed-empty">// ожидание донатов…</div></div>
+      <div class="legend">
+        <span><i style="background:#9be7ff"></i>текст</span>
+        <span><i style="background:#ffe45e"></i>крупный донат</span>
+        <span><i style="background:#7dff6e"></i>голосовое</span>
+        <span><i style="background:#c99bff"></i>кружочек</span>
+        <span><i style="background:#5a6b8c"></i>тестовый</span>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <div class="panel-title">▸ ПОДКЛЮЧЕНИЕ · DONATEX</div>
+        <div class="cn">
+          <span class="cn-label">External-токен</span>
+          <input id="dxToken" class="inp" placeholder="токен из кабинета DonateX" autocomplete="off">
+          <button id="btnDx" class="btn">ПОДКЛ.</button>
+        </div>
+        <p class="hint"><b>DonateX</b>: кабинет → Настройки → <b>API и доступ</b> → скопируй external-токен. Сайт подтянет историю донатов, топ за месяц, цель сбора и живые события через SignalR. Проверить можно кнопкой тестового доната в кабинете — он появится в ленте сразу.</p>
+        <p class="note">Токен хранится только в твоём браузере (localStorage) и никуда не отправляется, кроме API DonateX. Для публичного сайта на много стримеров используй OAuth + PKCE.</p>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-title">▸ ПОДКЛЮЧЕНИЕ · DONATIONALERTS</div>
+        <div class="cn">
+          <span class="cn-label">Client ID</span>
+          <input id="daClientId" class="inp" placeholder="ID приложения DA" autocomplete="off">
+        </div>
+        <div class="cn">
+          <span class="cn-label">Redirect URI</span>
+          <input id="daRedirect" class="inp" placeholder="https://твой-сайт/" autocomplete="off">
+          <button id="btnDaAuth" class="btn">ВХОД DA ↗</button>
+        </div>
+        <div class="cn">
+          <span class="cn-label">access_token</span>
+          <input id="daToken" class="inp" placeholder="вставь токен или зайди через кнопку выше" autocomplete="off">
+          <button id="btnDaConnect" class="btn">ПОДКЛ.</button>
+        </div>
+        <p class="hint"><b>DonationAlerts</b>: donationalerts.com/application/clients → создать приложение (тип Implicit / браузерное), scope: <b>oauth-user-show oauth-donation-index oauth-donation-subscribe</b>, Redirect URI — адрес этого сайта. Кнопка «ВХОД DA» откроет авторизацию: после входа токен вернётся в адресной строке (после #access_token=), сайт подхватит его сам.</p>
+        <p class="note">Донаты DA отображаются в исходной валюте без конверсии в рубли.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    пиксельный космос · данные принадлежат твоим донатерам · 2026<br>
+    <a id="btnDemo">↺ перезапустить демо</a>
+  </footer>
+</div>
+
+<div id="toast"></div>
+<div id="alert"><div id="alertBox">
+  <div id="alertUser"></div>
+  <div id="alertAmt"></div>
+  <div id="alertCur"></div>
+  <div id="alertMsg"></div>
+</div></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const save=(k,v)=>{try{localStorage.setItem('sd_'+k,v)}catch(e){}};
+const loadS=k=>{try{return localStorage.getItem('sd_'+k)}catch(e){return null}};
+
+const state={demo:false,donors:[],raw:[],goal:null,seen:new Set(),dxOn:false,daOn:false,daUser:null};
+let dxHub=null,daWs=null,daTokenInUse=null,simTimer=null;
+
+/* ---------- helpers ---------- */
+function fmt(n){return Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:0})}
+function fmtF(n){return Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:2})}
+function cur(c){return ({RUB:'₽',USD:'$',EUR:'€',KZT:'₸',UAH:'₴',BYN:'Br',BRL:'R$',TRY:'₺'})[c]||c}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function ago(iso){const t=new Date(iso).getTime();if(isNaN(t))return'';const s=(Date.now()-t)/1000;
+  if(s<60)return'только что';if(s<3600)return Math.floor(s/60)+' мин назад';
+  if(s<86400)return Math.floor(s/3600)+' ч назад';return Math.floor(s/86400)+' дн назад'}
+function daDate(s){return s?String(s).replace(' ','T')+'Z':new Date().toISOString()}
+
+let toastT;
+function toast(msg,color){const t=$('#toast');t.textContent=msg;t.style.borderColor=color||'#9be7ff';
+  t.style.color=color||'#9be7ff';t.classList.add('show');clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),3400)}
+
+function setStatus(k,cls,text){const el=$('#st-'+k);if(!el)return;el.className=cls;el.textContent=text;
+  const d=el.previousElementSibling;if(d&&d.classList.contains('dot'))d.className='dot '+cls}
+
+/* ---------- pixel identicon avatar ---------- */
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function ava(name){const c=document.createElement('canvas');c.width=8;c.height=8;
+  const g=c.getContext('2d');g.fillStyle='#0a1128';g.fillRect(0,0,8,8);
+  let x=hashStr(String(name||'anon'))||1;
+  const rnd=()=>{x^=x<<13;x^=x>>>17;x^=x<<5;x>>>=0;return x/4294967296};
+  const hue=Math.floor(rnd()*360);
+  const c1='hsl('+hue+',75%,62%)',c2='hsl('+((hue+45)%360)+',85%,72%)';
+  for(let y=0;y<8;y++)for(let gx=0;gx<4;gx++){const v=rnd();if(v<0.2)continue;
+    g.fillStyle=v<0.55?c1:c2;g.fillRect(gx,y,1,1);g.fillRect(7-gx,y,1,1)}
+  return c.toDataURL()}
+
+/* ---------- starfield ---------- */
+const sky=$('#sky'),ctx=sky.getContext('2d');
+let W=0,H=0,stars=[],shoot=null;
+function resize(){W=sky.width=innerWidth;H=sky.height=innerHeight;stars=[];
+  const n=Math.min(260,Math.floor(W*H/9000));
+  const cols=['#cfe0ff','#9be7ff','#ffffff','#ffe45e','#ff7ab8','#7dff6e'];
+  for(let i=0;i<n;i++)stars.push({x:Math.random()*W,y:Math.random()*H,
+    s:[1,1,2,2,3][Math.floor(Math.random()*5)],tw:Math.random()*6.28,
+    sp:0.008+Math.random()*0.03,c:cols[Math.floor(Math.random()*(Math.random()<0.85?3:6))]})}
+function draw(t){ctx.clearRect(0,0,W,H);
+  let g1=ctx.createRadialGradient(W*(0.22+0.05*Math.sin(t/9000)),H*0.28,0,W*0.22,H*0.28,W*0.36);
+  g1.addColorStop(0,'rgba(124,92,255,0.12)');g1.addColorStop(1,'rgba(124,92,255,0)');
+  ctx.fillStyle=g1;ctx.fillRect(0,0,W,H);
+  let g2=ctx.createRadialGradient(W*(0.8+0.04*Math.cos(t/11000)),H*0.62,0,W*0.8,H*0.62,W*0.3);
+  g2.addColorStop(0,'rgba(62,207,255,0.10)');g2.addColorStop(1,'rgba(62,207,255,0)');
+  ctx.fillStyle=g2;ctx.fillRect(0,0,W,H);
+  for(const st of stars){st.tw+=st.sp;ctx.globalAlpha=0.35+0.65*Math.abs(Math.sin(st.tw));
+    ctx.fillStyle=st.c;ctx.fillRect(st.x,st.y,st.s,st.s)}
+  ctx.globalAlpha=1;
+  if(!shoot&&Math.random()<0.003)shoot={x:Math.random()*W*0.7+W*0.15,y:Math.random()*H*0.4,len:0,max:130+Math.random()*140};
+  if(shoot){shoot.len+=9;const tail=Math.min(shoot.len,52);
+    const hx=shoot.x+shoot.len,hy=shoot.y+shoot.len*0.5;
+    ctx.strokeStyle='rgba(255,228,94,0.9)';ctx.lineWidth=2;ctx.beginPath();
+    ctx.moveTo(hx,hy);ctx.lineTo(hx-tail,hy-tail*0.5);ctx.stroke();
+    if(shoot.len>shoot.max||hx>W+80)shoot=null}
+  requestAnimationFrame(draw)}
+
+/* ---------- donors grid ---------- */
+function aggDonors(list){const m=new Map();
+  for(const d of list){if(d.isTest)continue;const k=d.username||'Аноним';
+    const c=m.get(k)||{name:k,sum:0,cnt:0,msg:''};
+    c.sum+=(d.amountInRub!=null?d.amountInRub:d.amount)||0;c.cnt++;
+    if(d.message&&d.message.length>((c.msg&&c.msg.length)||0))c.msg=d.message;m.set(k,c)}
+  return [...m.values()].sort((a,b)=>b.sum-a.sum).slice(0,12)}
+
+function renderDonors(){const g=$('#grid');g.innerHTML='';
+  const medals=['🥇','🥈','🥉'],mc=['#ffe45e','#cfd8ff','#ffb37a'];
+  state.donors.forEach((d,i)=>{
+    const el=document.createElement('div');
+    el.className='donor'+(i<3?' place-'+(i+1):'');
+    let h='';
+    if(i<3)h+='<div class="d-place" style="border-color:'+mc[i]+'">'+medals[i]+'</div>';
+    h+='<div class="d-body"><img class="d-ava" src="'+ava(d.name)+'" alt="">'
+      +'<div class="d-info"><div class="d-name">'+esc(d.name)+'</div>'
+      +'<div class="d-sub">'+(d.cnt?d.cnt+' донат(ов)':'за месяц')+'</div></div>'
+      +'<div class="d-amt"><div class="d-sum">'+fmt(d.sum)+'</div><div class="d-cur">₽ всего</div></div></div>';
+    if(d.msg)h+='<div class="d-msg">'+esc(d.msg)+'</div>';
+    el.innerHTML=h;g.appendChild(el)})}
+
+function popGrid(){const g=$('#grid');g.style.animation='none';void g.offsetWidth;g.style.animation=''}
+
+/* ---------- feed ---------- */
+function addFeed(d,opts){opts=opts||{};const feed=$('#feed');
+  const empty=feed.querySelector('.feed-empty');if(empty)empty.remove();
+  const rub=(d.amountInRub!=null?d.amountInRub:d.amount)||0;
+  const cls='f-item'+(d.isTest?' fx-test':rub>=1000?' fx-big':d.videoMessagePath?' fx-video':d.voiceMessagePath?' fx-voice':'');
+  const el=document.createElement('div');el.className=cls;
+  let badges='';
+  if(opts.src==='da')badges+='<span style="color:#c99bff">DonationAlerts</span>';
+  if(opts.src==='dx')badges+='<span style="color:#9be7ff">DonateX</span>';
+  if(d.isTest)badges+='<span>TEST</span>';
+  if(d.videoMessagePath)badges+='<span>📹 кружочек</span>';
+  if(d.voiceMessagePath)badges+='<span>🎙 голосовое</span>';
+  let h='<img class="f-ava" src="'+ava(d.username)+'" alt=""><div class="f-main"><div class="f-head">'
+    +'<span class="f-name">'+esc(d.username||'Аноним')+'</span>'
+    +'<span class="f-amt">'+fmtF(d.amount)+' '+cur(d.currency)+'</span>'
+    +(d.currency!=='RUB'&&rub?'<span class="f-eq">≈ ₽'+fmt(rub)+'</span>':'')
+    +(badges?'<span class="f-badges">'+badges+'</span>':'')
+    +'<span class="f-time">'+ago(d.timestamp)+'</span></div>'
+    +(d.message?'<div class="f-msg">'+esc(d.message)+'</div>':'')+'</div>';
+  el.innerHTML=h;feed.prepend(el);
+  while(feed.children.length>30)feed.lastChild.remove()}
+
+/* ---------- goal ---------- */
+function setGoal(goal){state.goal=goal;const p=$('#goalPanel');
+  if(!goal){p.style.display='none';return}
+  p.style.display='';
+  $('#goalName').textContent=goal.name||'Цель сбора';
+  const pc=Math.max(0,Math.min(100,goal.progressPercent||0));
+  $('#goalPct').textContent=pc.toFixed(0)+'%';
+  $('#goalBar').style.width=pc.toFixed(1)+'%';
+  $('#goalGlow').style.left='calc('+pc.toFixed(1)+'% - 5px)';
+  $('#goalCur').textContent=fmtF(goal.currentAmount||0)+' '+cur(goal.currency||'RUB');
+  $('#goalTgt').textContent='цель: '+fmtF(goal.goalAmount||0)}
+
+/* ---------- alert popup ---------- */
+let alertT;
+function showAlert(d){$('#alertUser').textContent='✦ '+(d.username||'Аноним')+' ✦';
+  $('#alertAmt').textContent=fmtF(d.amount)+' '+cur(d.currency);
+  const rub=(d.amountInRub!=null?d.amountInRub:d.amount)||0;
+  $('#alertCur').textContent=d.currency!=='RUB'&&rub?'≈ ₽'+fmt(rub):'';
+  $('#alertMsg').textContent=d.message||'';
+  $('#alert').classList.add('show');clearTimeout(alertT);
+  alertT=setTimeout(()=>$('#alert').classList.remove('show'),3800)}
+$('#alert').onclick=()=>$('#alert').classList.remove('show');
+
+/* ---------- demo mode ---------- */
+function exitDemoSilent(){if(!state.demo)return;state.demo=false;
+  $('#modeDemo').style.display='none';state.raw=[];state.donors=[];
+  $('#feed').innerHTML='<div class="feed-empty">// ожидание донатов…</div>';
+  setGoal(null);if(simTimer){clearInterval(simTimer);simTimer=null}}
+
+function startDemo(){if(!state.demo)return;
+  $('#modeDemo').style.display='';
+  setStatus('dx','ok','DonateX — DEMO');setStatus('dxr','ok','DonateX realtime: DEMO');
+  setStatus('da','ok','DonationAlerts — DEMO');setStatus('dar','ok','DA realtime: DEMO');
+  const now=Date.now();
+  const rows=[
+    ['NeDrugLegenda1377',15400,'Космос — это путь. Держи на новый корабль 🚀',now-1000*60*22,''],
+    ['PixelWitch',9200,'лети на Сатурн и не забудь кольца!',now-1000*60*90,''],
+    ['Mopsik_Lord',7350,'Мяу с орбиты',now-1000*3600*5,''],
+    ['AstroVova',5100,'',now-1000*3600*8,''],
+    ['luna_ray',4400,'',now-1000*3600*26,'voice'],
+    ['Grim_Trader',3900,'ставлю на тебя в следующем стриме',now-1000*3600*30,''],
+    ['Nebula_Kate',3150,'',now-1000*3600*50,''],
+    ['void_walker',2750,'первый раз тут, залетел по совету брата',now-1000*3600*74,''],
+    ['Captain_Chat',1900,'',now-1000*3600*100,''],
+    ['Space_Potato',1350,'картошка в космосе — это эстетика',now-1000*3600*120,'test'],
+    ['Comet_Dash',900,'',now-1000*3600*140,''],
+    ['tiny_star',450,'',now-1000*3600*160,'']];
+  const raw=rows.map((r,i)=>({id:'demo'+i,username:r[0],amount:r[1],amountInRub:r[1],currency:'RUB',
+    message:r[2],timestamp:new Date(r[3]).toISOString(),isTest:r[4]==='test',
+    voiceMessagePath:r[4]==='voice'?'demo':null,videoMessagePath:null,src:'demo'}));
+  state.raw=raw;state.donors=aggDonors(raw);renderDonors();
+  raw.slice().reverse().forEach(d=>addFeed(d,{silent:true}));
+  setGoal({name:'Новый микрофон для стрима',currentAmount:12450,goalAmount:20000,
+    currency:'RUB',progressPercent:62.25});
+  toast('🛰️ Демо-режим: вставь токены в панели справа, чтобы подключить DonateX и DonationAlerts','#ffe45e');
+  if(!simTimer)simTimer=setInterval(simTick,9000)}
+
+function simTick(){if(!state.demo)return;
+  const names=['Star_Voyager','PixelCat','moonshine','VoidHunter','Astro_Mops','KosmoKot','nova_blast','RedShift','Comet_Catcher','orbit_boi','Space_Toast','lunar_drift'];
+  const amts=[50,100,150,200,250,300,500,700,1000];
+  const msgs=['Держи на топливо! 🚀','лучший стример галактики','','полетели на Марс','пиксели навсегда ❤','','за отличный эфир!','звёздный привет'];
+  const a=amts[Math.floor(Math.random()*amts.length)];
+  const d={id:'sim'+Date.now(),username:names[Math.floor(Math.random()*names.length)],
+    amount:a,amountInRub:a,currency:'RUB',message:msgs[Math.floor(Math.random()*msgs.length)],
+    timestamp:new Date().toISOString(),isTest:false,voiceMessagePath:null,videoMessagePath:null};
+  state.raw.unshift(d);state.donors=aggDonors(state.raw);renderDonors();addFeed(d);popGrid();
+  if(state.goal){state.goal.currentAmount+=a;
+    state.goal.progressPercent=Math.min(100,state.goal.currentAmount/state.goal.goalAmount*100);
+    setGoal(state.goal)}}
+
+/* ---------- on donation (realtime) ---------- */
+function onDonation(d,src){if(!d||state.seen.has(d.id))return;state.seen.add(d.id);
+  if(state.demo)exitDemoSilent();
+  state.raw.unshift(d);state.donors=aggDonors(state.raw);renderDonors();addFeed(d,{src:src});popGrid();
+  const rub=(d.amountInRub!=null?d.amountInRub:d.amount)||0;
+  if(!d.isTest&&(rub>=300||d.videoMessagePath))showAlert(d)}
+
+/* ---------- DonateX ---------- */
+const DX='https://donatex.gg/api/v1';
+const hdr=t=>({Authorization:'Bearer '+t});
+
+async function loadDonateX(tok){setStatus('dx','warn','DonateX: загрузка…');
+  try{
+    exitDemoSilent();state.dxOn=true;
+    const [don,top,goal]=await Promise.all([
+      fetch(DX+'/donations?skip=0&take=100',{headers:hdr(tok)}),
+      fetch(DX+'/top-donators?period=Month&count=10',{headers:hdr(tok)}),
+      fetch(DX+'/goals',{headers:hdr(tok)}).catch(()=>null)]);
+    if(don.status===401||don.status===403)throw new Error('токен отклонён ('+don.status+')');
+    if(!don.ok)throw new Error('HTTP '+don.status);
+    const dj=await don.json();
+    const list=Array.isArray(dj)?dj:(dj.data||dj.items||[]);
+    state.raw=list.map(d=>Object.assign({src:'dx'},d));
+    state.donors=aggDonors(state.raw);renderDonors();
+    state.raw.slice(0,30).reverse().forEach(d=>addFeed(d,{silent:true,src:'dx'}));
+    if(top.ok){const tp=await top.json();
+      if(Array.isArray(tp)&&tp.length){state.donors=tp.map(t=>({name:t.username,sum:t.totalAmountInRub,cnt:'',msg:''}));renderDonors()}}
+    if(goal&&goal.ok){try{const gj=await goal.json();
+      const g=Array.isArray(gj)?gj[0]:(gj&&gj.data?gj.data:gj);
+      setGoal(g&&g.name!=null?g:null)}catch(e){setGoal(null)}}
+    else setGoal(null);
+    setStatus('dx','ok','DonateX — подключено ('+list.length+' донатов)');
+    connectDX(tok)}
+  catch(e){setStatus('dx','bad','DonateX: '+e.message);
+    toast('❌ DonateX: '+e.message+' (проверь токен / CORS)',' #ff5c7a'.trim());
+    state.demo=true;startDemo()}}
+
+async function connectDX(tok){try{
+  if(dxHub){try{await dxHub.stop()}catch(e){}dxHub=null}
+  if(!tok||typeof signalR==='undefined'){
+    setStatus('dxr','off','DonateX realtime: '+(typeof signalR==='undefined'?'нет библиотеки':'нет токена'));return}
+  dxHub=new signalR.HubConnectionBuilder()
+    .withUrl('https://donatex.gg/api/public-donations-hub',{accessTokenFactory:()=>tok})
+    .withAutomaticReconnect().configureLogging(signalR.LogLevel.Warning).build();
+  dxHub.on('DonationCreated',d=>onDonation(Object.assign({src:'dx'},d),'dx'));
+  dxHub.on('DonationRerun',()=>{});
+  dxHub.on('GoalUpdated',g=>setGoal(g));
+  await dxHub.start();
+  setStatus('dxr','ok','DonateX realtime: online');
+  toast('⚡ DonateX realtime подключён','#7dff6e')}
+ catch(e){setStatus('dxr','bad','DonateX realtime: ошибка')}}
+
+/* ---------- DonationAlerts ---------- */
+const DA='https://www.donationalerts.com';
+const DA_SCOPES='oauth-user-show oauth-donation-index oauth-donation-subscribe';
+
+function daAuth(){const cid=$('#daClientId').value.trim(),red=$('#daRedirect').value.trim();
+  if(!cid||!red){toast('Введи Client ID и Redirect URI приложения DA','#ff5c7a');return}
+  const url=DA+'/oauth/authorize?client_id='+encodeURIComponent(cid)
+    +'&redirect_uri='+encodeURIComponent(red)+'&response_type=token&scope='+encodeURIComponent(DA_SCOPES);
+  window.open(url,'_blank')}
+
+function tryDA(){const m=location.hash.match(/access_token=([^&]+)/);
+  if(m){const tok=m[1];save('da_token',tok);try{history.replaceState(null,'',location.pathname+location.search)}catch(e){location.hash=''}return tok}
+  return loadS('da_token')}
+
+function mapDA(d){return {id:'da'+d.id,username:d.username,amount:d.amount,currency:d.currency,
+  amountInRub:d.amount,message:d.message||'',timestamp:daDate(d.created_at),
+  isTest:false,voiceMessagePath:null,videoMessagePath:null,src:'da'}}
+
+function mergeDAList(list){if(!Array.isArray(list))return;
+  const mapped=list.map(mapDA);
+  if(state.demo)exitDemoSilent();
+  state.raw=state.raw.concat(mapped);
+  if(!state.dxOn){state.donors=aggDonors(state.raw);renderDonors()}
+  mapped.slice(0,20).reverse().forEach(d=>addFeed(d,{silent:true,src:'da'}))}
+
+async function connectDA(tok){setStatus('da','warn','DonationAlerts: загрузка…');
+  daTokenInUse=tok;
+  try{
+    const ur=await fetch(DA+'/api/v1/user/oauth',{headers:hdr(tok)});
+    if(!ur.ok)throw new Error('токен отклонён ('+ur.status+')');
+    const user=(await ur.json()).data;state.daUser=user;state.daOn=true;
+    setStatus('da','ok','DA — '+(user.name||user.code||'подключено'));
+    try{
+      const dr=await fetch(DA+'/api/v1/alerts/donations?page=1',{headers:hdr(tok)});
+      if(dr.ok){const dj=await dr.json();mergeDAList(dj.data||[])}
+    }catch(e){}
+    connectDACentrifugo(user)}
+  catch(e){setStatus('da','bad','DonationAlerts: '+e.message);
+    toast('❌ DonationAlerts: '+e.message,'#ff5c7a')}}
+
+async function connectDACentrifugo(user){try{
+  if(daWs){try{daWs.onclose=null;daWs.close()}catch(e){}}
+  let clientId=null;const uid=user.id;
+  daWs=new WebSocket('wss://centrifugo.donationalerts.com/connection/websocket');
+  daWs.onopen=()=>{daWs.send(JSON.stringify({params:{token:user.socket_connection_token},id:1}))};
+  daWs.onmessage=async ev=>{let m;try{m=JSON.parse(ev.data)}catch(e){return}
+    if(m.id===1&&m.result&&m.result.client){clientId=m.result.client;
+      try{
+        const sr=await fetch(DA+'/api/v1/centrifuge/subscribe',{method:'POST',
+          headers:Object.assign(hdr(daTokenInUse),{'Content-Type':'application/json'}),
+          body:JSON.stringify({channels:['$alerts:donation_'+uid],client:clientId})});
+        if(!sr.ok){setStatus('dar','bad','DA realtime: subscribe '+sr.status);return}
+        const sj=await sr.json();const ch=sj.channels&&sj.channels[0];
+        if(ch)daWs.send(JSON.stringify({params:{channel:ch.channel,token:ch.token},method:1,id:2}));
+      }catch(e){setStatus('dar','bad','DA realtime: '+e.message)}}
+    else if(m.id===2){
+      if(m.error)setStatus('dar','bad','DA realtime: ошибка подписки');
+      else{setStatus('dar','ok','DA realtime: online');toast('⚡ DonationAlerts realtime подключён','#7dff6e')}}
+    else{const r=m.result&&m.result.data;let don=null;
+      if(r&&r.name==='donation')don=r.donation;
+      else if(r&&r.data&&r.data.name==='donation')don=r.data.donation;
+      if(don)onDonation(mapDA(don),'da')}};
+  daWs.onclose=()=>{setStatus('dar','off','DA realtime: offline');
+    if(state.daOn)setTimeout(()=>{if(state.daOn&&state.daUser)connectDACentrifugo(state.daUser)},5000)};
+  daWs.onerror=()=>{setStatus('dar','bad','DA realtime: ошибка WS')}}
+ catch(e){setStatus('dar','bad','DA realtime: '+e.message)}}
+
+/* ---------- wiring ---------- */
+$('#btnDx').onclick=()=>{const t=$('#dxToken').value.trim();
+  if(!t){toast('Вставь токен DonateX','#ff5c7a');return}
+  save('dx_token',t);loadDonateX(t)};
+$('#btnDaAuth').onclick=daAuth;
+$('#btnDaConnect').onclick=()=>{const t=$('#daToken').value.trim();
+  if(!t){toast('Вставь access_token DonationAlerts','#ff5c7a');return}
+  save('da_token',t);connectDA(t)};
+$('#btnDemo').onclick=()=>location.reload();
+
+(async function init(){
+  resize();requestAnimationFrame(draw);
+  window.addEventListener('resize',resize);
+  const h=tryDA();
+  if(h){$('#daToken').value=h;toast('🔑 Токен DonationAlerts получен из URL','#7dff6e')}
+  const dx=loadS('dx_token'),da=loadS('da_token');
+  if(dx){$('#dxToken').value=dx;await loadDonateX(dx)}
+  if(da){$('#daToken').value=da;await connectDA(da)}
+  if(!dx&&!da)state.demo=true;
+  if(state.demo)startDemo();
+})();
+</script>
+</body>
+</html>
